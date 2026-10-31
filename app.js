@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
-const VERSION='1.0.0';
+const VERSION='1.1.0';
 const CFG=Object.assign({apiKey:'',folder:''},window.LEGGIO_CONFIG||{});
 const PEER_PREFIX='leggio-insieme-';
 
@@ -291,30 +291,47 @@ let cur=null;         // brano PDF aperto dall'organizzatore
 let clockOff=0;
 const hostNow=()=>Date.now()+(mode==='guest'?clockOff:0);
 const viewNow=()=>hostNow()+(+prefs.off||0);
-const mspq=()=>60000/S.bpm*(song&&song.ts[1]===8?2:1);
-function countQ(){return S.countIn?song.mQ:0;}
+const beatQ=()=>(S&&S.beat)||1;
+const mspq=()=>60000/(S.bpm*beatQ());
+function countQ(){return (S.count||0)*beatQ();}
+function defaultBeat(ts){const n=ts[0],d=ts[1];if(d===2)return 2;if(d===8&&n%3===0&&n>3)return 1.5;if(d===8)return 0.5;if(d===16)return 0.25;return 1;}
+const barBeats=(ts,b)=>Math.max(1,Math.round(ts[0]*4/ts[1]/b));
+const UNIT={0.25:'semicroma',0.5:'croma',1:'semiminima',1.5:'semiminima puntata',2:'minima',3:'minima puntata'};
 function posAt(t){if(!S||!song)return 0;if(!S.playing)return S.fromBeat;return S.fromBeat+(t-S.startAt)/mspq()-countQ();}
 
 /* ================= Rete (PeerJS) ================= */
 let peer=null,conns=new Map(),hostConn=null,retryT=null,syncT=null,pongs=[],pending=new Map(),joinTries=0,lost=false;
 const peerId=c=>PEER_PREFIX+c.toLowerCase();
 function newCode(){const A='ABCDEFGHJKLMNPQRSTUVWXYZ';let s='';for(let i=0;i<4;i++)s+=A[Math.floor(Math.random()*A.length)];return s;}
+const PeerC=()=>window.Peer||(window.peerjs&&window.peerjs.Peer);
+function makePeer(id){
+  const opts={debug:1,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}].concat(Array.isArray(CFG.iceServers)?CFG.iceServers:[])}};
+  const P=PeerC();return id?new P(id,opts):new P(opts);
+}
+function setHostNet(t,bad){
+  $('netStatus').textContent=t;$('netStatus').className='status'+(bad?' bad':'');
+  $('codeChip').classList.toggle('bad',!!bad);
+}
 function netErr(e){
   const t=e&&e.type;
   if(t==='browser-incompatible')return 'Questo browser non supporta il collegamento diretto tra telefoni.';
   if(t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed')return 'Non riesco a collegarmi al servizio che mette in contatto i telefoni. Controlla la connessione.';
-  return 'Errore di collegamento ('+(t||'sconosciuto')+').';
+  return 'Errore di collegamento ('+(t||'sconosciuto')+(e&&e.message?': '+e.message:'')+').';
 }
 async function hostOpen(){
-  try{await loadScript('peer',()=>!!window.Peer);}catch(e){toast('Non riesco a scaricare il modulo di collegamento: controlla la connessione. Il leggio funziona solo su questo telefono.');return;}
+  setHostNet('Scarico il modulo di collegamento…');
+  try{await loadScript('peer',()=>!!PeerC());}catch(e){setHostNet('Non riesco a scaricare il modulo di collegamento (PeerJS). Controlla la connessione, poi esci e ricrea la sessione.',true);openQr();return;}
+  let shown=false;
   const tryOpen=()=>{
     code=newCode();$('codeChip').textContent=code;
-    peer=new window.Peer(peerId(code),{debug:0});
-    peer.on('open',()=>{renderPeople();});
+    setHostNet('Mi registro sul servizio di collegamento…');
+    try{peer=makePeer(peerId(code));}catch(e){setHostNet('Il browser non supporta il collegamento tra telefoni: '+e.message,true);openQr();return;}
+    const tmo=setTimeout(()=>{if(peer&&!peer.open)setHostNet('Il servizio di collegamento non risponde. Controlla la connessione; se non cambia, esci e ricrea la sessione.',true);},12000);
+    peer.on('open',()=>{clearTimeout(tmo);setHostNet('In linea: gli altri possono entrare con il codice '+code+'.');renderPeople();if(!shown){shown=true;openQr();}});
     peer.on('error',e=>{
-      if(e.type==='unavailable-id'){try{peer.destroy();}catch(_){}tryOpen();return;}
+      if(e.type==='unavailable-id'){clearTimeout(tmo);try{peer.destroy();}catch(_){}tryOpen();return;}
       if(e.type==='peer-unavailable')return;
-      toast(netErr(e));
+      setHostNet(netErr(e),true);if(!shown){shown=true;openQr();}
     });
     peer.on('disconnected',()=>{setTimeout(()=>{try{if(peer&&!peer.destroyed)peer.reconnect();}catch(_){}},1500);});
     peer.on('connection',c=>{
@@ -345,22 +362,25 @@ async function onHostData(c,d){
   }
 }
 async function guestJoin(c){
-  try{await loadScript('peer',()=>!!window.Peer);}catch(e){joinStatus('Non riesco a scaricare il modulo di collegamento. Controlla la connessione e riprova.');return false;}
+  joinStatus('Scarico il modulo di collegamento…');
+  try{await loadScript('peer',()=>!!PeerC());}catch(e){joinStatus('Non riesco a scaricare il modulo di collegamento (PeerJS). Controlla la connessione e riprova.');return false;}
+  joinStatus('');
   code=c;mode='guest';S=null;joinTries=0;lost=false;
   enterStand();
-  showLoad('Mi collego alla sessione '+code+'…');
-  peer=new window.Peer({debug:0});
-  peer.on('open',()=>guestConnect());
+  showLoad('1/3 · Mi collego al servizio di collegamento…');
+  try{peer=makePeer();}catch(e){showLoad('Questo browser non supporta il collegamento tra telefoni ('+e.message+').');return false;}
+  const tmo=setTimeout(()=>{if(mode==='guest'&&peer&&!peer.open)showLoad('Il servizio di collegamento non risponde. Controlla la connessione del telefono, poi premi Esci e riprova.');},12000);
+  peer.on('open',()=>{clearTimeout(tmo);guestConnect();});
   peer.on('error',e=>{
     if(mode!=='guest')return;
     if(e.type==='peer-unavailable'){
       joinTries++;
-      if(!S&&joinTries>=3){showLoad('Non trovo la sessione '+code+'. Controlla il codice e che chi organizza abbia la sessione aperta.');}
+      if(!S)showLoad(joinTries>=2?'Non trovo la sessione '+code+'. Controlla il codice e che sul telefono di chi organizza la sessione sia «In linea». Riprovo da solo…':'2/3 · Cerco la sessione '+code+'…');
       else if(S)setGuestState('Collegamento perso, riprovo…');
       clearTimeout(retryT);retryT=setTimeout(guestConnect,3000);
       return;
     }
-    toast(netErr(e));
+    if(!S)showLoad(netErr(e));else toast(netErr(e));
   });
   peer.on('disconnected',()=>{setTimeout(()=>{try{if(peer&&!peer.destroyed)peer.reconnect();}catch(_){}},1500);});
   return true;
@@ -369,7 +389,13 @@ function guestConnect(){
   if(mode!=='guest'||!peer||peer.destroyed)return;
   try{if(hostConn)hostConn.close();}catch(e){}
   const c=peer.connect(peerId(code),{reliable:true});hostConn=c;
+  if(!S)showLoad('2/3 · Cerco la sessione '+code+'…');
+  const tmo=setTimeout(()=>{if(hostConn===c&&!c.open&&mode==='guest'){
+    const m='La sessione '+code+' esiste, ma la rete non permette il collegamento diretto tra i due dispositivi. Prova a mettere questo telefono sullo stesso Wi-Fi di chi organizza, o sul suo hotspot.';
+    if(!S)showLoad(m);else setGuestState('Collegamento bloccato dalla rete');
+    clearTimeout(retryT);retryT=setTimeout(guestConnect,4000);}},15000);
   c.on('open',()=>{
+    clearTimeout(tmo);if(!S)showLoad('3/3 · Collegato. Aspetto il brano da chi organizza…');
     joinTries=0;lost=false;
     sendTo(c,{t:'hello',nm:myName(),inst:prefs.inst});
     clockSync(12);clearInterval(syncT);syncT=setInterval(()=>clockSync(5),20000);
@@ -419,7 +445,7 @@ function netClose(){
 }
 
 /* ================= Stato condiviso ================= */
-function baseState(){return {rev:0,song:{kind:'demo',id:'ode'},bpm:100,playing:false,startAt:0,fromBeat:0,countIn:true,k:''};}
+function baseState(){return {rev:0,song:{kind:'demo',id:'ode'},bpm:100,beat:1,count:4,playing:false,startAt:0,fromBeat:0,k:''};}
 function publish(){
   if(mode!=='host')return;
   S.rev=Date.now();S.k=apiKey();
@@ -429,7 +455,7 @@ function receive(d){
   if(!d||typeof d!=='object'||!d.song)return;
   if(S&&d.rev<S.rev)return;
   const prev=S&&S.playing;
-  S={rev:+d.rev||0,song:d.song,bpm:clamp(+d.bpm||100,20,300),playing:!!d.playing,startAt:+d.startAt||0,fromBeat:Math.max(0,+d.fromBeat||0),countIn:d.countIn!==false,k:String(d.k||'')};
+  S={rev:+d.rev||0,song:d.song,bpm:clamp(+d.bpm||100,20,300),playing:!!d.playing,startAt:+d.startAt||0,fromBeat:Math.max(0,+d.fromBeat||0),beat:UNIT[+d.beat]?+d.beat:1,count:clamp(parseInt(d.count,10)||0,0,32),k:String(d.k||'')};
   applySong();
   onStateChange(prev);
 }
@@ -478,7 +504,7 @@ $('joinBtn').onclick=async()=>{
 };
 $('createBtn').onclick=()=>{
   unlockAudio();
-  mode='host';S=baseState();applySong();S.bpm=song.bpm;
+  mode='host';S=baseState();applySong();S.bpm=song.bpm;S.beat=defaultBeat(song.ts);S.count=barBeats(song.ts,S.beat);
   enterStand();
   hostOpen();
   if(rootFolder()&&apiKey())loadLibrary(false);
@@ -529,7 +555,7 @@ function renderPeople(list){
 function updateBar(){
   if(!song){$('songTitle').textContent=mode==='guest'?'In attesa…':'—';$('songMeta').textContent='';return;}
   $('songTitle').textContent=song.title;
-  let meta=song.ts[0]+'/'+song.ts[1]+' · '+(S?S.bpm:song.bpm)+' BPM · '+song.bars+' battute';
+  let meta=song.ts[0]+'/'+song.ts[1]+' · '+(S?S.bpm:song.bpm)+' BPM'+(S&&beatQ()!==1?' ('+UNIT[beatQ()]+')':'')+' · '+song.bars+' battute';
   if(song.kind==='pdf'){const p=song.parts[choosePart(song)];if(p)meta+=' · '+p.label;}
   $('songMeta').textContent=meta;
   const p=$('playBtn');
@@ -562,8 +588,8 @@ function hostChange(fn){if(!canEditSong())return;fn();applySong();publish();upda
 function openSongSheet(){
   if(!S)return;
   const lock=S.playing;$('lockNote').hidden=!lock;
-  ['bpmIn','bpmRange','bpmDn','bpmUp','barIn','countSet','tsSel'].forEach(id=>$(id).disabled=lock);
-  $('bpmIn').value=S.bpm;$('bpmRange').value=S.bpm;$('countSet').checked=S.countIn;
+  ['bpmIn','bpmRange','bpmDn','bpmUp','barIn','countIn','beatSel','cnt1','cnt2','tsSel'].forEach(id=>$(id).disabled=lock);
+  $('bpmIn').value=S.bpm;$('bpmRange').value=S.bpm;$('countIn').value=S.count;$('beatSel').value=String(beatQ());countHint();
   $('tsSel').value=song?song.ts.join('/'):'4/4';$('tsSel').disabled=lock||!song||song.kind!=='pdf';
   $('barIn').max=song?song.bars:1;
   $('folderIn').value=prefs.folder||'';$('keyIn').value=prefs.apiKey||'';
@@ -580,8 +606,19 @@ $('bpmRange').onchange=e=>setBpm(e.target.value);
 $('bpmDn').onclick=()=>setBpm(+$('bpmIn').value-2);
 $('bpmUp').onclick=()=>setBpm(+$('bpmIn').value+2);
 $('barIn').onchange=e=>{if(!song)return;const v=clamp(parseInt(e.target.value,10)||1,1,song.bars);e.target.value=v;hostChange(()=>{S.fromBeat=(v-1)*song.mQ;});panPx=0;};
-$('countSet').onchange=e=>hostChange(()=>{S.countIn=e.target.checked;});
-$('tsSel').onchange=e=>{if(!cur||!canEditSong())return;cur.ts=e.target.value.split('/').map(Number);saveMeta({ts:cur.ts});pushCur();};
+function countHint(){if(!song||!S)return;const n=barBeats(song.ts,beatQ());$('cntHint').textContent=`Con questo battito una battuta di ${song.ts.join('/')} conta ${n} battit${n===1?'o':'i'}.`;$('cnt1').textContent='1 battuta ('+n+')';$('cnt2').textContent='2 battute ('+2*n+')';}
+function setCount(v){v=clamp(parseInt(v,10)||0,0,32);$('countIn').value=v;hostChange(()=>{S.count=v;});if(cur&&song&&song.kind==='pdf')saveMeta({count:v});}
+$('countIn').onchange=e=>setCount(e.target.value);
+$('cnt1').onclick=()=>setCount(barBeats(song.ts,beatQ()));
+$('cnt2').onclick=()=>setCount(2*barBeats(song.ts,beatQ()));
+$('beatSel').onchange=e=>{const b=+e.target.value;if(!UNIT[b])return;hostChange(()=>{S.beat=b;});if(cur&&song&&song.kind==='pdf')saveMeta({beat:b});countHint();};
+$('tsSel').onchange=e=>{
+  if(!cur||!canEditSong())return;
+  cur.ts=e.target.value.split('/').map(Number);
+  const b=defaultBeat(cur.ts),c=barBeats(cur.ts,b);
+  S.beat=b;S.count=c;$('beatSel').value=String(b);$('countIn').value=c;
+  saveMeta({ts:cur.ts,beat:b,count:c});pushCur();countHint();
+};
 
 /* --- brani d'esempio --- */
 function renderDemos(){
@@ -591,7 +628,7 @@ function renderDemos(){
     const t=document.createElement('span');t.className='t';t.textContent=p.title;
     const s=document.createElement('span');s.className='s';s.textContent=p.ts.join('/')+' · '+p.bars+' battute';
     const b=document.createElement('button');b.className='ibtn';b.textContent='Usa';b.disabled=!canEditSong();
-    b.onclick=()=>{hostChange(()=>{S.song={kind:'demo',id:d.id};S.fromBeat=0;cur=null;});S.bpm=song.bpm;$('barIn').value=1;publish();updateBar();openSongSheet();};
+    b.onclick=()=>{hostChange(()=>{S.song={kind:'demo',id:d.id};S.fromBeat=0;cur=null;});S.bpm=song.bpm;S.beat=defaultBeat(song.ts);S.count=barBeats(song.ts,S.beat);$('barIn').value=1;publish();updateBar();openSongSheet();};
     r.append(t,s,b);box.append(r);
   }
 }
@@ -656,6 +693,7 @@ async function openBrano(b){
       parts.push({fileId:f.id,mod,label,inst:(meta.inst||{})[f.id]||guessInst(f.name),sys:an.sys,pages:an.pages,err});
     }
     cur={id:b.id,title:b.title,parts,ts:meta.ts||[4,4],bpm:meta.bpm||100,bars:meta.bars||0,v:Date.now()};
+    S.beat=UNIT[meta.beat]?meta.beat:defaultBeat(cur.ts);S.count=meta.count!=null?meta.count:barBeats(cur.ts,S.beat);
     driveStatus('');
     S.fromBeat=0;$('barIn').value=1;
     pushCur();
@@ -733,13 +771,14 @@ async function openReview(i){
 
 /* --- QR --- */
 function joinUrl(){return location.origin+location.pathname.replace(/index\.html$/,'')+'?s='+code;}
-$('codeChip').onclick=async()=>{
-  if(mode!=='host'||!code)return;
+$('codeChip').onclick=()=>openQr();
+async function openQr(){
+  if(mode!=='host')return;
   $('qrCode').textContent=code;$('qrLink').textContent=joinUrl();$('qrSheet').hidden=false;
-  const box=$('qrBox');box.textContent='';
+  const box=$('qrBox');box.textContent='';box.hidden=false;
   try{await loadScript('qr',()=>!!window.qrcode);const q=window.qrcode(0,'M');q.addData(joinUrl());q.make();box.innerHTML=q.createSvgTag({cellSize:6,margin:2,scalable:true});}
   catch(e){box.hidden=true;}
-};
+}
 $('copyLink').onclick=async()=>{try{await navigator.clipboard.writeText(joinUrl());toast('Link copiato.');}catch(e){const r=document.createRange();r.selectNodeContents($('qrLink'));const s=getSelection();s.removeAllRanges();s.addRange(r);}};
 
 /* --- impostazioni personali --- */
@@ -1017,8 +1056,8 @@ requestAnimationFrame(frame);
 function countOverlay(t,b){
   const ci=$('countin');
   if(S.playing&&b<S.fromBeat){
-    const into=(t-S.startAt)/mspq(),unit=4/song.ts[1];
-    ci.hidden=false;ci.textContent=into<0?'•':String(Math.min(song.ts[0],Math.floor(into/unit)+1));
+    const into=(t-S.startAt)/mspq();
+    ci.hidden=false;ci.textContent=into<0?'•':String(Math.min(S.count,Math.floor(into/beatQ()+1e-6)+1));
   }else ci.hidden=true;
 }
 (function(){
@@ -1071,15 +1110,18 @@ function tone(at,dur,midi){
 function sched(){
   if(!ctx||ctx.state!=='running'||!S||!song||!S.playing||mode==='home')return;
   const key=S.rev+':'+S.startAt+':'+S.playing;if(key!==schedBase)resetSched();
-  const t=viewNow(),ahead=t+150,q=mspq(),cQ=countQ(),unit=4/song.ts[1];
+  const t=viewNow(),ahead=t+150,q=mspq(),cQ=countQ(),unit=beatQ();
   const musicStart=S.startAt+cQ*q;
   const endT=musicStart+(song.total-S.fromBeat)*q;
   if(!nextClick){nextClick=S.startAt;while(nextClick<t-30)nextClick+=unit*q;}
   while(nextClick<ahead&&nextClick<endT-1){
     if(prefs.met&&nextClick>=t-30){
-      const beatPos=S.fromBeat-cQ+(nextClick-S.startAt)/q;
-      const rel=((beatPos%song.mQ)+song.mQ)%song.mQ;
-      click(aTime(nextClick),rel<1e-3||song.mQ-rel<1e-3);
+      const k=Math.round((nextClick-S.startAt)/(unit*q));
+      const inCount=(nextClick-S.startAt)/q<cQ-1e-6;
+      let accent;
+      if(inCount){const r=((k-S.count)%barBeats(song.ts,unit)+barBeats(song.ts,unit))%barBeats(song.ts,unit);accent=k===0||r===0;}
+      else{const beatPos=S.fromBeat+(nextClick-S.startAt)/q-cQ;const rel=((beatPos%song.mQ)+song.mQ)%song.mQ;accent=rel<1e-3||song.mQ-rel<1e-3;}
+      click(aTime(nextClick),accent);
     }
     nextClick+=unit*q;
   }

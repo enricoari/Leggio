@@ -61,6 +61,8 @@ input[type=text],input[type=number],input[type=url],select{background:var(--bg);
 .codein{font-family:var(--f-mono);letter-spacing:.3em;text-transform:uppercase;font-size:22px;text-align:center;max-width:170px}
 .note{font-size:13px;color:var(--muted);margin:0}
 .status{font-size:14px;padding:8px 10px;border-radius:7px;background:var(--accent-soft);margin:0}
+.status.bad{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.chip.bad{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
 .install{border:1px dashed var(--accent);border-radius:10px;padding:12px 14px;font-size:14px;display:flex;gap:12px;align-items:center}
 .install b{color:var(--accent)}
 .how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -253,12 +255,16 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       <div class="field"><span class="lbl">Tempo (BPM)</span>
         <div class="tempo"><button class="ibtn" id="bpmDn" aria-label="Più lento">−</button><input type="number" id="bpmIn" min="30" max="240" inputmode="numeric" aria-label="Battiti al minuto"><button class="ibtn" id="bpmUp" aria-label="Più veloce">+</button></div>
       </div>
-      <div class="field"><label for="tsSel">Tempo in chiave</label><select id="tsSel"><option>4/4</option><option>3/4</option><option>2/4</option><option>2/2</option><option>6/8</option><option>3/8</option><option>9/8</option><option>12/8</option><option>5/4</option></select></div>
+      <div class="field"><label for="tsSel">Tempo in chiave</label><select id="tsSel"><option>4/4</option><option>3/4</option><option>2/4</option><option value="2/2">2/2 (tempo tagliato)</option><option>3/2</option><option>6/4</option><option>5/4</option><option>6/8</option><option>9/8</option><option>12/8</option><option>3/8</option><option>5/8</option><option>7/8</option></select></div>
+      <div class="field"><label for="beatSel">Il battito è la</label><select id="beatSel"><option value="1">Semiminima ♩</option><option value="2">Minima (tempo tagliato)</option><option value="0.5">Croma ♪</option><option value="1.5">Semiminima puntata (6/8, 12/8)</option><option value="3">Minima puntata</option><option value="0.25">Semicroma</option></select></div>
       <div class="field"><label for="barIn">Parti dalla battuta</label><input type="number" id="barIn" min="1" value="1" inputmode="numeric"></div>
     </div>
     <input type="range" id="bpmRange" min="30" max="240" step="1" aria-label="Tempo">
-    <label class="tog">Battuta di conteggio prima di partire <input type="checkbox" id="countSet" checked></label>
-    <p class="note">Nel 6/8 e simili il BPM si riferisce alla croma.</p>
+    <p class="note">I BPM sono i battiti al minuto della figura scelta: il metronomo batte quella.</p>
+    <div class="field"><label for="countIn">Battiti di attacco prima di partire</label>
+      <div class="row"><input type="number" id="countIn" min="0" max="32" inputmode="numeric" style="width:90px"><button class="ibtn" id="cnt1">1 battuta</button><button class="ibtn" id="cnt2">2 battute</button></div>
+      <p class="note" id="cntHint"></p>
+    </div>
 
     <section id="partsSec" hidden>
       <span class="lbl">Parti del brano</span>
@@ -292,6 +298,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div class="sheet" id="qrSheet" hidden>
   <div class="card">
     <h3>Fai entrare gli altri <button class="ibtn" data-close>Chiudi</button></h3>
+    <p class="status" id="netStatus">Preparo la sessione…</p>
     <p class="bigcode" id="qrCode">----</p>
     <div class="qr" id="qrBox"></div>
     <p class="note" style="text-align:center">Inquadra il QR con la fotocamera dell'iPhone, oppure apri l'app e scrivi il codice.</p>
