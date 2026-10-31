@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
-const VERSION='1.1.0';
+const VERSION='1.1.2';
 const CFG=Object.assign({apiKey:'',folder:''},window.LEGGIO_CONFIG||{});
 const PEER_PREFIX='leggio-insieme-';
 
@@ -517,7 +517,7 @@ $('createBtn').onclick=()=>{
   if(q&&/^[A-Za-z]{4}$/.test(q)){$('codeIn').value=q.toUpperCase();joinStatus(prefs.nick?'Codice inserito: scegli lo strumento e premi Entra.':'Codice inserito: scrivi il tuo nome, scegli lo strumento e premi Entra.');}
   $('verNote').textContent='Versione '+VERSION;
   try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
-  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{try{r.update();}catch(e){}}).catch(()=>{});
 })();
 
 /* ================= Leggio ================= */
@@ -566,7 +566,7 @@ function onStateChange(prevPlaying){
   updateBar();resetSched();
   if(S.playing)reqWake();else releaseWake();
   if(!S.playing)panPx=0;
-  if(mode==='guest'&&S.playing&&!prevPlaying&&!audioUnlocked)toast('Tocca lo schermo per attivare il metronomo.');
+  if(mode==='guest'&&S.playing&&!prevPlaying&&!(ctx&&ctx.state==='running'))toast('Tocca lo schermo per attivare il metronomo.');
 }
 
 /* --- comandi dell'organizzatore --- */
@@ -1053,6 +1053,7 @@ function frame(){
   }
 }
 requestAnimationFrame(frame);
+setTimeout(()=>{if(!schedTimer)schedTimer=setInterval(sched,25);},0);
 function countOverlay(t,b){
   const ci=$('countin');
   if(S.playing&&b<S.fromBeat){
@@ -1079,15 +1080,22 @@ function countOverlay(t,b){
 })();
 
 /* ================= Audio ================= */
-let ctx=null,audioUnlocked=false,schedTimer=null,nextClick=0,schedBase=null,gi=-1;
+let ctx=null,audioUnlocked=false,schedTimer=null,nextClick=0,schedBase=null,gi=-1,silentEl=null;
+const SILENT='data:audio/wav;base64,UklGRvQHAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YdAHAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
 function unlockAudio(){
+  try{if(navigator.audioSession&&navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';}catch(e){}
+  // iOS: un elemento audio in riproduzione fa ignorare il tasto silenzioso anche al metronomo
+  try{if(!silentEl){silentEl=new Audio(SILENT);silentEl.loop=true;silentEl.setAttribute('playsinline','');silentEl.volume=0.01;}
+    if(silentEl.paused){const p=silentEl.play();if(p&&p.catch)p.catch(()=>{});}}catch(e){}
   try{if(!ctx){const A=window.AudioContext||window.webkitAudioContext;if(!A)return;ctx=new A();}
-    if(ctx.state!=='running')ctx.resume();
-    if(!audioUnlocked){const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(ctx.destination);s.start(0);}
-    audioUnlocked=true;}catch(e){}
+    if(ctx.state!=='running'){const p=ctx.resume();if(p&&p.catch)p.catch(()=>{});}
+    const b=ctx.createBuffer(1,1,22050),src=ctx.createBufferSource();src.buffer=b;src.connect(ctx.destination);src.start(0);
+  }catch(e){}
+  audioUnlocked=!!ctx&&ctx.state==='running';
   if(!schedTimer)schedTimer=setInterval(sched,25);
 }
-document.addEventListener('pointerdown',unlockAudio,{passive:true});
+['touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{passive:true}));
+document.addEventListener('pointerdown',()=>{if(!ctx)unlockAudio();},{passive:true});
 function resetSched(){nextClick=0;gi=-1;schedBase=S?S.rev+':'+S.startAt+':'+S.playing:null;}
 function stopAudio(){resetSched();}
 function aTime(epoch){return ctx.currentTime+(epoch-viewNow())/1000;}
@@ -1107,7 +1115,12 @@ function tone(at,dur,midi){
   o.connect(lp);o2.connect(lp);lp.connect(g).connect(ctx.destination);
   o.start(at);o2.start(at);o.stop(end+0.15);o2.stop(end+0.15);
 }
+let audioWarnT=0;
 function sched(){
+  if(S&&S.playing&&mode!=='home'&&(prefs.met||prefs.guide)&&(!ctx||ctx.state!=='running')){
+    if(Date.now()-audioWarnT>8000){audioWarnT=Date.now();toast('Tocca lo schermo per attivare il metronomo.');}
+    return;
+  }
   if(!ctx||ctx.state!=='running'||!S||!song||!S.playing||mode==='home')return;
   const key=S.rev+':'+S.startAt+':'+S.playing;if(key!==schedBase)resetSched();
   const t=viewNow(),ahead=t+150,q=mspq(),cQ=countQ(),unit=beatQ();
@@ -1144,6 +1157,7 @@ function releaseWake(){try{if(wake)wake.release();}catch(e){}wake=null;}
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState!=='visible')return;
   if(S&&S.playing)reqWake();
+  try{if(ctx&&ctx.state!=='running')ctx.resume().catch(()=>{});}catch(e){}
   if(mode==='guest'){clockSync(6);if(!hostConn||!hostConn.open){clearTimeout(retryT);retryT=setTimeout(guestConnect,300);}}
   if(peer&&peer.disconnected&&!peer.destroyed){try{peer.reconnect();}catch(e){}}
 });

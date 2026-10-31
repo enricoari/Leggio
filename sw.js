@@ -1,5 +1,5 @@
 /* Service worker: rende l'app installabile e veloce da riaprire. */
-const VERSION = 'leggio-1.1.0';
+const VERSION = 'leggio-1.1.2';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const CDN = /^(https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com))\//;
 
@@ -23,7 +23,7 @@ self.addEventListener('fetch', e => {
   }
   if (new URL(url).origin === self.location.origin) {
     // file dell'app: prima la rete, così le modifiche arrivano subito
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(new Request(req.url, {cache: 'no-cache', credentials: 'same-origin'})).then(res => {
       if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
       return res;
     }).catch(() => caches.match(req, {ignoreSearch: true}).then(hit => hit || caches.match('index.html'))));
