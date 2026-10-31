@@ -5,6 +5,6 @@
   ma metterle qui le rende uguali su tutti i telefoni.
 */
 window.LEGGIO_CONFIG = {
-  apiKey: "",   // es. "AIzaSy..."
-  folder: ""    // es. "https://drive.google.com/drive/folders/1AbC..."
+  apiKey: "AIzaSyCKUvng68sRCabxsFu8LSnPAvKrEjrDvbo",   // es. "AIzaSy..."
+  folder: "https://drive.google.com/drive/folders/1Yglsm8oHROgEMHCLRguHily0RLI4-lCB?usp=sharing"    // es. "https://drive.google.com/drive/folders/1AbC..."
 };
