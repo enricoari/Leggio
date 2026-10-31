@@ -184,7 +184,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
         </div>
       </div>
       <div class="how">
-        <div><b>Gira il telefono</b>In orizzontale i righi del PDF scorrono uno dopo l'altro; in verticale la pagina sale riga per riga.</div>
+        <div><b>Gira il telefono</b>In orizzontale vedi 3 righi alla volta e la pagina sale mentre suoni; dalle impostazioni puoi scegliere quanti righi o lo scorrimento a sinistra.</div>
         <div><b>La tua parte</b>Ognuno vede il PDF del proprio strumento, preso dalla cartella del brano su Drive.</div>
         <div><b>Tutti insieme</b>Una battuta di conteggio e poi lo scorrimento segue le battute, uguale su ogni telefono.</div>
       </div>
@@ -223,7 +223,9 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div class="field"><label for="instSet">Strumento</label><select id="instSet"></select></div>
     <div class="field" id="partField" hidden><label for="partSet">Parte da leggere</label><select id="partSet"></select></div>
     <div class="field" id="modeField" hidden><label for="modeSet">Scorrimento del PDF</label>
-      <select id="modeSet"><option value="auto">Automatico (orizzontale se giri il telefono)</option><option value="h">Righi in fila, scorre a sinistra</option><option value="v">Pagina, scorre verso l'alto</option></select></div>
+      <select id="modeSet"><option value="v">Pagina che scorre in continuo</option><option value="r">Pagina che sale di un rigo alla volta</option><option value="h">Righi in fila, scorre a sinistra</option></select></div>
+    <div class="field" id="rowsField" hidden><label for="rowsSet">Righi sullo schermo</label>
+      <select id="rowsSet"><option value="auto">Automatico (3 in orizzontale, larghezza piena in verticale)</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="0">Larghezza piena</option></select></div>
     <div class="field" id="octField"><label for="octSet">Ottava della parte</label>
       <select id="octSet"><option value="auto">Automatica</option><option value="-2">2 ottave sotto</option><option value="-1">1 ottava sotto</option><option value="0">Come scritto</option><option value="1">1 ottava sopra</option><option value="2">2 ottave sopra</option></select></div>
     <section>
@@ -307,7 +309,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
   </div>
 </div>
 
-<script src="config.js?v=1.1.2"></script>
-<script src="app.js?v=1.1.2"></script>
+<script src="config.js?v=1.2.1"></script>
+<script src="app.js?v=1.2.1"></script>
 </body>
 </html>

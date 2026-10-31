@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
-const VERSION='1.1.2';
+const VERSION='1.2.1';
 const CFG=Object.assign({apiKey:'',folder:''},window.LEGGIO_CONFIG||{});
 const PEER_PREFIX='leggio-insieme-';
 
@@ -114,8 +114,9 @@ const demoById=id=>DEMOS.find(d=>d.id===id)||DEMOS[0];
 
 /* ================= Preferenze ================= */
 const LS='leggio.app.v1';
-let prefs={nick:'',inst:'piano',oct:'auto',zoom:1,size:1,head:.3,met:true,guide:false,vol:.6,off:0,rot:false,pdfMode:'auto',mark:false,inv:false,parts:{},apiKey:'',folder:''};
+let prefs={nick:'',inst:'piano',oct:'auto',zoom:1,size:1,head:.3,met:true,guide:false,vol:.6,off:0,rot:false,pdfMode:'v',rows:'auto',mark:false,inv:false,parts:{},apiKey:'',folder:''};
 try{Object.assign(prefs,JSON.parse(localStorage.getItem(LS)||'{}'));}catch(e){}
+if(!['h','v','r'].includes(prefs.pdfMode))prefs.pdfMode='v';
 const savePrefs=()=>{try{localStorage.setItem(LS,JSON.stringify(prefs));}catch(e){}};
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const myName=()=>(prefs.nick||'').trim()||'Senza nome';
@@ -635,30 +636,67 @@ function renderDemos(){
 
 /* --- Drive: elenco brani --- */
 function driveStatus(t){const s=$('driveStatus');s.hidden=!t;s.textContent=t||'';}
+// navigazione tra le cartelle: nav = [{id,title,folders,pdfs}]
+let nav=[];
+async function listFolder(id,title){
+  const items=await driveList(id);
+  return {id,title,folders:items.filter(f=>f.mimeType===FOLDER).sort(byName).map(f=>({id:f.id,title:f.name})),pdfs:items.filter(isPdf).sort(byName)};
+}
 async function loadLibrary(force){
-  if(!rootFolder()||!apiKey()){lib=null;driveStatus('Collega la cartella Drive dalle impostazioni qui sotto.');renderLib();return;}
-  if(!force&&!lib){const c=await idb.get('lib:'+rootFolder());if(c){lib=c;renderLib();}}
+  if(!rootFolder()||!apiKey()){lib=null;nav=[];driveStatus('Collega la cartella Drive dalle impostazioni qui sotto.');renderLib();return;}
+  const root=rootFolder();
+  if(!force&&!lib){const c=await idb.get('nav:'+root);if(c&&c.id){nav=[c];lib=c.folders;renderLib();}}
+  const at=force&&nav.length>1?nav[nav.length-1]:null;
   driveStatus('Leggo la cartella su Drive…');
   try{
-    const root=rootFolder();
-    const items=await driveList(root);
-    const folders=items.filter(f=>f.mimeType===FOLDER).sort(byName);
-    if(folders.length)lib=folders.map(f=>({id:f.id,title:f.name}));
-    else if(items.some(isPdf)){const m=await driveMeta(root).catch(()=>({name:'Brano'}));lib=[{id:root,title:m.name}];}
-    else lib=[];
-    await idb.set('lib:'+root,lib);
-    driveStatus(lib.length?'':'La cartella è vuota: aggiungi una sottocartella per brano con dentro i PDF delle parti.');
-  }catch(e){driveStatus(driveMsg(e)+(lib&&lib.length?' Uso l\'ultimo elenco salvato.':''));}
+    if(at){const f=await listFolder(at.id,at.title);nav[nav.length-1]=f;}
+    else{
+      const m=await driveMeta(root).catch(()=>({name:'Drive'}));
+      const f=await listFolder(root,m.name||'Cartella principale');nav=[f];await idb.set('nav:'+root,f);
+    }
+    lib=nav[nav.length-1].folders;
+    const top=nav[nav.length-1];
+    driveStatus(top.folders.length||top.pdfs.length?'':'Questa cartella è vuota.');
+  }catch(e){driveStatus(driveMsg(e)+(nav.length?' Uso l\'ultimo elenco salvato.':''));}
   renderLib();
+}
+async function openFolder(f){
+  if(opening)return;
+  if(!canEditSong()){driveStatus('Ferma il brano per cambiare spartito.');return;}
+  driveStatus('Leggo «'+f.title+'»…');
+  try{
+    const r=await listFolder(f.id,f.title);
+    if(!r.folders.length&&r.pdfs.length){driveStatus('');openBrano(r);return;}
+    if(!r.folders.length){driveStatus('Nella cartella «'+f.title+'» non ci sono PDF né altre cartelle.');return;}
+    nav.push(r);lib=r.folders;driveStatus('');renderLib();
+    $('libList').scrollIntoView({block:'nearest'});
+  }catch(e){driveStatus(driveMsg(e));}
 }
 function renderLib(){
   const box=$('libList');box.textContent='';
-  if(!lib||!lib.length){if(rootFolder()&&apiKey()&&!lib){const e=document.createElement('div');e.className='empty';e.textContent='Premi «Aggiorna» per leggere i brani.';box.append(e);}return;}
-  for(const d of lib){
+  if(!nav.length){if(rootFolder()&&apiKey()){const e=document.createElement('div');e.className='empty';e.textContent='Premi «Aggiorna» per leggere i brani.';box.append(e);}return;}
+  const top=nav[nav.length-1];
+  if(nav.length>1){
+    const r=document.createElement('div');r.className='row';
+    const back=document.createElement('button');back.className='ibtn';back.textContent='← '+nav[nav.length-2].title;
+    back.onclick=()=>{nav.pop();lib=nav[nav.length-1].folders;driveStatus('');renderLib();};
+    const here=document.createElement('span');here.className='note';here.textContent=nav.slice(1).map(n=>n.title).join(' › ');
+    r.append(back,here);box.append(r);
+  }
+  const ed=canEditSong();
+  if(top.pdfs.length&&(top.folders.length||nav.length===1)){
+    const r=document.createElement('div');r.className='item'+(cur&&cur.id===top.id?' cur':'');
+    const t=document.createElement('span');t.className='t';t.textContent=top.title;
+    const s2=document.createElement('span');s2.className='s';s2.textContent=top.pdfs.length+' PDF in questa cartella';
+    const b=document.createElement('button');b.className='ibtn';b.textContent=cur&&cur.id===top.id?'Aperto':'Apri come brano';b.disabled=!ed;
+    b.onclick=()=>openBrano(top);
+    r.append(t,s2,b);box.append(r);
+  }
+  for(const d of top.folders){
     const r=document.createElement('div');r.className='item'+(cur&&cur.id===d.id?' cur':'');
     const t=document.createElement('span');t.className='t';t.textContent=d.title;
-    const b=document.createElement('button');b.className='ibtn';b.textContent=cur&&cur.id===d.id?'Aperto':'Apri';b.disabled=!canEditSong();
-    b.onclick=()=>openBrano(d);
+    const b=document.createElement('button');b.className='ibtn';b.textContent=cur&&cur.id===d.id?'Aperto':'Apri';b.disabled=!ed;
+    b.onclick=()=>openFolder(d);
     r.append(t,b);box.append(r);
   }
 }
@@ -675,7 +713,7 @@ async function openBrano(b){
   if(!canEditSong()||opening)return;
   opening=true;driveStatus('Leggo «'+b.title+'»…');
   try{
-    const items=(await driveList(b.id)).filter(isPdf).sort(byName);
+    const items=b.pdfs||(await driveList(b.id)).filter(isPdf).sort(byName);
     if(!items.length){driveStatus('Nella cartella «'+b.title+'» non ci sono PDF.');return;}
     const meta=(await idb.get('meta:'+b.id))||{};
     await loadPdfJs();
@@ -796,7 +834,8 @@ $('guideSet').onchange=e=>{prefs.guide=e.target.checked;savePrefs();resetSched()
 $('octSet').onchange=e=>{prefs.oct=e.target.value;savePrefs();rebuild();};
 $('markSet').onchange=e=>{prefs.mark=e.target.checked;savePrefs();PV.dirty=true;};
 $('invSet').onchange=e=>{prefs.inv=e.target.checked;savePrefs();PV.dirty=true;};
-$('modeSet').onchange=e=>{prefs.pdfMode=e.target.value;savePrefs();panPx=0;rebuild();};
+$('modeSet').onchange=e=>{prefs.pdfMode=e.target.value;savePrefs();panPx=0;$('rowsField').hidden=prefs.pdfMode==='h';rebuild();};
+$('rowsSet').value=String(prefs.rows);$('rowsSet').onchange=e=>{prefs.rows=e.target.value;savePrefs();rebuild();};
 $('instSet').onchange=e=>setInst(e.target.value);
 $('setBtn').onclick=()=>{fillParts();$('setSheet').hidden=false;};
 document.querySelectorAll('.sheet').forEach(sh=>{sh.addEventListener('click',e=>{if(e.target===sh||e.target.closest('[data-close]'))sh.hidden=true;});});
@@ -923,7 +962,7 @@ function choosePart(sg){
 function fillParts(){
   const f=$('partField'),sel=$('partSet');
   const pdf=song&&song.kind==='pdf';
-  f.hidden=!pdf;$('modeField').hidden=!pdf;$('octField').hidden=!!pdf;
+  f.hidden=!pdf;$('modeField').hidden=!pdf;$('rowsField').hidden=!pdf||prefs.pdfMode==='h';$('octField').hidden=!!pdf;
   if(!pdf)return;
   sel.textContent='';
   song.parts.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p.label+' ('+instById(p.inst).n+')';sel.append(o);});
@@ -948,14 +987,16 @@ function pdfLayout(W,H){
   const items=[];let sb=0;
   for(const s of part.sys){if(s.off)continue;const n=sysBars(s);items.push({s,start:sb,n,cx0:Math.max(0,s.x0-0.012),cx1:Math.min(1,s.x1+0.012)});sb+=n;}
   if(!items.length){showLoad('Questa parte non ha righi da leggere.');PV.layout=null;return;}
-  const mode2=prefs.pdfMode==='h'||prefs.pdfMode==='v'?prefs.pdfMode:(W>=H?'h':'v');
+  const mode2=['h','v','r'].includes(prefs.pdfMode)?prefs.pdfMode:'v';
   let k,len=0;
   if(mode2==='h'){
     k=Infinity;for(const it of items)k=Math.min(k,(H*0.96)/(it.s.cy1-it.s.cy0));k*=prefs.size;
     for(const it of items){it.w=(it.cx1-it.cx0)*k;it.h=(it.s.cy1-it.s.cy0)*k;it.x=len;it.y=H/2-(((it.s.sy0+it.s.sy1)/2)-it.s.cy0)*k;len+=it.w;}
   }else{
-    let mw=0;for(const it of items)mw=Math.max(mw,it.cx1-it.cx0);
-    k=(W-16)/(mw||1)*Math.min(1,prefs.size);
+    let mw=0,ah=0;for(const it of items){mw=Math.max(mw,it.cx1-it.cx0);ah+=it.s.cy1-it.s.cy0;}ah/=items.length;
+    const rowsN=prefs.rows==='auto'?(W>H?3:0):(+prefs.rows||0);
+    const kW=(W-16)/(mw||1),kH=rowsN?(H*0.97)/(rowsN*ah):Infinity;
+    k=Math.min(kW,kH*prefs.size,kW*Math.min(1,prefs.size)*(rowsN?99:1));
     for(const it of items){it.w=(it.cx1-it.cx0)*k;it.h=(it.s.cy1-it.s.cy0)*k;it.x=(W-it.w)/2;it.y=len;len+=it.h;}
   }
   const dpr=Math.min(2,window.devicePixelRatio||1);
@@ -972,7 +1013,7 @@ function pdfPos(bar){
   let it=L.items[L.items.length-1];
   for(const x of L.items){if(bar<x.start+x.n){it=x;break;}}
   const rel=Math.min(bar-it.start,it.n);
-  if(L.mode==='v')return it.y+(rel/it.n)*it.h;
+  if(L.mode!=='h')return it.y+(rel/it.n)*it.h;
   const i=Math.min(it.n-1,Math.floor(rel)),f=rel-i;const b=it.s.b;
   return it.x+(b[i]+f*(b[i+1]-b[i])-it.cx0)*L.k;
 }
@@ -980,10 +1021,16 @@ const anchorOf=L=>L.mode==='h'?L.W*prefs.head:L.H*Math.min(0.45,prefs.head);
 function pdfFrame(bar,pan){
   const L=PV.layout;if(!L||!PV.doc)return;
   const anchor=anchorOf(L);
-  const off=pdfPos(bar)-anchor-pan;
   const sb=Math.max(0,bar)*L.scale;
   let cur2=0;for(let i=0;i<L.items.length;i++)if(sb>=L.items[i].start)cur2=i;
   PV.cur=cur2;
+  let off=pdfPos(bar)-anchor-pan;
+  if(L.mode==='r'&&S&&S.playing){
+    const target=L.items[cur2].y-8,tn=performance.now();
+    if(!isFinite(PV.sm)||Math.abs(PV.sm-target)>L.H*3)PV.sm=target;
+    else PV.sm+= (target-PV.sm)*Math.min(1,(tn-(PV.smT||tn))/110);
+    PV.smT=tn;off=PV.sm;
+  }else{PV.sm=off;PV.smT=performance.now();}
   if(!PV.dirty&&Math.abs(off-PV.lastOff)<0.25)return;
   PV.dirty=false;PV.lastOff=off;
   const c=$('pdfc'),x=c.getContext('2d'),dpr=L.dpr;
@@ -1002,7 +1049,14 @@ function pdfFrame(bar,pan){
     else{x.fillStyle='#fff';x.fillRect(sx,sy,it.w,it.h);x.strokeStyle='#ccc';x.lineWidth=1;const top=sy+(it.s.sy0-it.s.cy0)*L.k,gap=(it.s.sy1-it.s.sy0)*L.k/4;for(let l=0;l<5;l++){x.beginPath();x.moveTo(sx+8,top+l*gap);x.lineTo(sx+it.w-8,top+l*gap);x.stroke();}}
   });
   x.filter='none';
-  if(prefs.mark){x.fillStyle=cs.getPropertyValue('--accent').trim()||'#2a45cc';x.globalAlpha=.75;if(L.mode==='h')x.fillRect(anchor-1,0,2,L.H);else x.fillRect(0,anchor-1,L.W,2);x.globalAlpha=1;}
+  if(prefs.mark){
+    x.fillStyle=cs.getPropertyValue('--accent').trim()||'#2a45cc';x.globalAlpha=.75;
+    if(L.mode==='h')x.fillRect(anchor-1,0,2,L.H);
+    else if(L.mode==='v')x.fillRect(0,anchor-1,L.W,2);
+    else{const it=L.items[cur2],rel=Math.min(Math.max(0,sb-it.start),it.n),i=Math.min(it.n-1,Math.floor(rel)),f=rel-i,b=it.s.b;
+      const hx=it.x+(b[i]+f*(b[i+1]-b[i])-it.cx0)*L.k,ty=it.y-off+(it.s.sy0-it.s.cy0)*L.k,hh=(it.s.sy1-it.s.sy0)*L.k;
+      x.fillRect(hx-1.5,ty-hh*0.6,3,hh*2.2);}
+    x.globalAlpha=1;}
   for(const i of need)if(!PV.crops.has(i))PV.crops.set(i,{state:'q'});
   pumpCrops();
 }
