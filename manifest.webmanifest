@@ -1,0 +1,17 @@
+{
+  "name": "Leggio d'insieme",
+  "short_name": "Leggio",
+  "description": "Spartiti che scorrono a tempo, insieme su tutti i telefoni.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eceff4",
+  "theme_color": "#2a45cc",
+  "lang": "it",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

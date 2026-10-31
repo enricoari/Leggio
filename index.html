@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Leggio d'insieme</title>
+<meta name="theme-color" content="#2a45cc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Leggio">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Noto+Music&display=swap">
+<style>
+/* Layout: home a colonna stretta per entrare in sessione; poi leggio a schermo pieno con barra comandi sottile e spartito che scorre. */
+:root{
+  --bg:#eceff4; --paper:#fcfcfa; --ink:#181a21; --muted:#646a79; --line:#d5d9e2; --soft:#e3e7ef;
+  --accent:#2a45cc; --accent-ink:#ffffff; --accent-soft:rgba(42,69,204,.12); --danger:#b42318; --ok:#1f7a4d;
+  --f-display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --f-body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --f-music:"Noto Music","Bravura Text","Apple Symbols","Segoe UI Symbol",serif;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0e1015; --paper:#171a21; --ink:#e7e9ef; --muted:#9298a8; --line:#2b303b; --soft:#20242d;
+  --accent:#8c9dff; --accent-ink:#0e1015; --accent-soft:rgba(140,157,255,.16); --danger:#ff8a80; --ok:#6fd6a0; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;overflow:hidden;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+input,select{font-size:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{height:100%;display:flex;flex-direction:column}
+
+/* HOME */
+#home{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-left:max(16px,var(--sal));padding-right:max(16px,var(--sar));padding-top:calc(24px + var(--sat));padding-bottom:calc(40px + var(--sab))}
+.wrap{max-width:860px;margin:0 auto;display:grid;gap:24px}
+.brand{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap}
+.brand h1{font-family:var(--f-display);font-weight:800;font-size:clamp(44px,12vw,76px);line-height:.88;letter-spacing:.01em;margin:0;text-transform:uppercase}
+.brand p{margin:0 0 4px;color:var(--muted);max-width:40ch}
+.staffdeco{height:22px;background:repeating-linear-gradient(to bottom,var(--ink) 0 1px,transparent 1px 5px);opacity:.18}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:720px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;align-content:start;min-width:0}
+.panel h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:26px;text-transform:uppercase;letter-spacing:.02em}
+.hint{margin:0;color:var(--muted);font-size:14px}
+.field{display:grid;gap:5px;min-width:0}
+.field label,.lbl{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input[type=text],input[type=number],input[type=url],select{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:10px 12px;min-width:0;width:100%}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{border:1px solid var(--line);background:var(--soft);border-radius:8px;padding:10px 16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.codein{font-family:var(--f-mono);letter-spacing:.3em;text-transform:uppercase;font-size:22px;text-align:center;max-width:170px}
+.note{font-size:13px;color:var(--muted);margin:0}
+.status{font-size:14px;padding:8px 10px;border-radius:7px;background:var(--accent-soft);margin:0}
+.install{border:1px dashed var(--accent);border-radius:10px;padding:12px 14px;font-size:14px;display:flex;gap:12px;align-items:center}
+.install b{color:var(--accent)}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:720px){.how{grid-template-columns:1fr}}
+.how div{border-top:2px solid var(--ink);padding-top:8px;font-size:14px;color:var(--muted)}
+.how b{display:block;color:var(--ink);font-family:var(--f-display);font-size:20px;text-transform:uppercase;letter-spacing:.02em}
+
+/* LEGGIO */
+#stand{flex:1;display:flex;flex-direction:column;min-height:0}
+.bar{display:flex;align-items:center;gap:8px;padding-top:calc(6px + var(--sat));padding-bottom:6px;padding-left:max(10px,var(--sal));padding-right:max(10px,var(--sar));background:var(--paper);border-bottom:1px solid var(--line);min-height:48px}
+.chip{font-family:var(--f-mono);font-size:13px;letter-spacing:.12em;padding:5px 9px;border-radius:6px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;border:0}
+button.chip{cursor:pointer}
+.songinfo{min-width:0;display:grid;line-height:1.15}
+.songinfo b{font-family:var(--f-display);font-size:19px;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.songinfo span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.people{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.people::-webkit-scrollbar{display:none}
+.person{white-space:nowrap;font-size:12px;padding:4px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.person b{color:var(--ink);font-weight:600}
+.person.host{border-color:var(--accent)}
+.ibtn{border:1px solid var(--line);background:var(--soft);border-radius:8px;height:36px;min-width:36px;padding:0 10px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.ibtn.go{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.ibtn.stop{background:var(--danger);border-color:var(--danger);color:var(--paper)}
+.ibtn svg{width:16px;height:16px}
+.ibtn:disabled{opacity:.45}
+@media (max-width:560px){.hide-sm{display:none}}
+.viewport{position:relative;flex:1;min-height:0;overflow:hidden;background:var(--paper);touch-action:none;user-select:none;-webkit-user-select:none}
+#score{position:absolute;left:0;top:0;will-change:transform}
+.clefbox{position:absolute;left:0;top:0;bottom:0;pointer-events:none;z-index:2}
+.playhead{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:3;pointer-events:none;box-shadow:0 0 0 6px var(--accent-soft)}
+#pdfc{position:absolute;inset:0;width:100%;height:100%;display:block}
+.loadmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:4;color:var(--muted);font-size:15px;text-align:center;padding:0 24px;background:var(--paper)}
+.countin{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5;pointer-events:none;font-family:var(--f-display);font-weight:800;font-size:min(42vh,180px);color:var(--accent);opacity:.9}
+.toast{position:absolute;left:50%;bottom:calc(14px + var(--sab));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:8px 14px;border-radius:8px;font-size:13px;z-index:6;max-width:calc(100% - 32px);text-align:center}
+.rotate{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:6;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--muted);display:flex;gap:10px;align-items:center;max-width:calc(100% - 32px)}
+.rotate button{border:0;background:none;color:var(--accent);font-weight:600;cursor:pointer;padding:0}
+.progress{height:3px;background:var(--soft)}
+.progress i{display:block;height:100%;width:0;background:var(--accent)}
+#score .n{fill:var(--ink);stroke:var(--ink)}
+#score .n.on{fill:var(--accent);stroke:var(--accent)}
+#score .n.on .hd-open{fill:var(--paper)}
+#score .past{opacity:.38}
+
+/* PANNELLI */
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(10,12,18,.45);display:flex;justify-content:flex-end}
+.sheet .card{background:var(--paper);width:min(440px,100%);height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-top:calc(16px + var(--sat));padding-bottom:calc(24px + var(--sab));padding-left:max(18px,var(--sal));padding-right:max(18px,var(--sar));display:grid;gap:16px;align-content:start;border-left:1px solid var(--line)}
+.sheet .card.wide{width:min(760px,100%)}
+.sheet h3{margin:0;font-family:var(--f-display);font-size:24px;text-transform:uppercase;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet section{display:grid;gap:12px;padding-top:14px;border-top:1px solid var(--line)}
+.rng{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.rng output{font-family:var(--f-mono);font-size:13px;min-width:6ch;text-align:right;font-variant-numeric:tabular-nums}
+.rng label{grid-column:1/-1}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.tog{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tog input{width:20px;height:20px;accent-color:var(--accent)}
+.tempo{display:flex;align-items:center;gap:8px}
+.tempo input[type=number]{width:84px;font-family:var(--f-mono);text-align:center}
+.err{color:var(--danger);font-size:13px}
+.cols3{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.list,.parts{display:grid;gap:8px}
+.item,.part{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);flex-wrap:wrap}
+.item .t{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item.cur{border-color:var(--accent)}
+.item .s,.part .s{font-size:12px;color:var(--muted)}
+.part .fn{flex:1 1 140px;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.part select{flex:1 1 150px;width:auto;padding:7px 10px}
+.pill{font-size:12px;font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pill.warn{color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+.rv{display:grid;gap:14px}
+.rvrow{display:grid;gap:6px}
+.rvrow canvas{width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:6px;display:block}
+.rvrow.off canvas{opacity:.3}
+.rvctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.rvctl .num{font-family:var(--f-mono);min-width:3ch;text-align:center;font-weight:600}
+.rvctl .ibtn{height:30px;min-width:30px}
+.qr{background:#fff;padding:14px;border-radius:12px;justify-self:center;width:min(280px,100%)}
+.qr svg{width:100%;height:auto;display:block}
+.bigcode{font-family:var(--f-mono);font-size:44px;letter-spacing:.25em;text-align:center;color:var(--accent);margin:0}
+.link{font-family:var(--f-mono);font-size:12px;word-break:break-all;color:var(--muted);text-align:center;user-select:all;-webkit-user-select:all}
+@media (prefers-reduced-motion: reduce){.playhead{box-shadow:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="home">
+    <div class="wrap">
+      <div class="brand">
+        <h1>Leggio<br>d'insieme</h1>
+        <p>Chi organizza sceglie brano e tempo, gli altri si collegano col proprio strumento, e al via lo spartito di ognuno scorre insieme.</p>
+      </div>
+      <div class="staffdeco" aria-hidden="true"></div>
+      <div class="install" id="installHint" hidden>
+        <span>Per averla come app: in Safari tocca <b>Condividi</b> e poi <b>Aggiungi alla schermata Home</b>.</span>
+      </div>
+      <div class="panel">
+        <h2>Tu</h2>
+        <div class="cols">
+          <div class="field"><label for="nick">Nome</label><input type="text" id="nick" maxlength="24" placeholder="Es. Pietro" autocomplete="nickname"></div>
+          <div class="field"><label for="instHome">Strumento</label><select id="instHome"></select></div>
+        </div>
+        <p class="note" id="instNote"></p>
+      </div>
+      <div class="cols">
+        <div class="panel">
+          <h2>Partecipa</h2>
+          <p class="hint">Scrivi il codice che vedi sul telefono di chi organizza, oppure inquadra il suo QR con la fotocamera.</p>
+          <div class="row">
+            <input type="text" id="codeIn" class="codein" maxlength="4" placeholder="CODICE" autocomplete="off" autocapitalize="characters" aria-label="Codice sessione">
+            <button class="btn primary" id="joinBtn">Entra</button>
+          </div>
+          <p class="status" id="joinStatus" hidden></p>
+        </div>
+        <div class="panel">
+          <h2>Organizza</h2>
+          <p class="hint">Crei la sessione, scegli il brano dalla cartella Drive e avvii per tutti.</p>
+          <button class="btn" id="createBtn">Crea una sessione</button>
+        </div>
+      </div>
+      <div class="how">
+        <div><b>Gira il telefono</b>In orizzontale i righi del PDF scorrono uno dopo l'altro; in verticale la pagina sale riga per riga.</div>
+        <div><b>La tua parte</b>Ognuno vede il PDF del proprio strumento, preso dalla cartella del brano su Drive.</div>
+        <div><b>Tutti insieme</b>Una battuta di conteggio e poi lo scorrimento segue le battute, uguale su ogni telefono.</div>
+      </div>
+      <p class="note" id="verNote"></p>
+    </div>
+  </main>
+
+  <div id="stand" hidden>
+    <div class="bar">
+      <button class="chip" id="codeChip" title="Mostra il codice e il QR">----</button>
+      <div class="songinfo"><b id="songTitle">—</b><span id="songMeta"></span></div>
+      <div class="people" id="people"></div>
+      <button class="ibtn" id="songBtn" hidden aria-label="Brano e tempo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 12V3l7-1.5v9"/><circle cx="4" cy="12" r="2"/><circle cx="11" cy="10.5" r="2"/></svg><span class="hide-sm">Brano</span></button>
+      <button class="ibtn" id="setBtn" aria-label="Impostazioni"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4h8M13 4h1M2 12h3M8 12h6"/><circle cx="11.5" cy="4" r="1.6"/><circle cx="6.5" cy="12" r="1.6"/></svg></button>
+      <button class="ibtn go" id="playBtn" hidden>Avvia</button>
+      <span class="chip" id="guestState" hidden>In attesa</span>
+      <button class="ibtn" id="leaveBtn">Esci</button>
+    </div>
+    <div class="progress"><i id="prog"></i></div>
+    <div class="viewport" id="vp">
+      <svg id="score"></svg>
+      <svg class="clefbox" id="clef"></svg>
+      <canvas id="pdfc" hidden></canvas>
+      <div class="loadmsg" id="loadMsg" hidden></div>
+      <div class="playhead" id="ph"></div>
+      <div class="countin" id="countin" hidden></div>
+      <div class="rotate" id="rotate" hidden>Gira il telefono in orizzontale per vedere più battute <button id="rotOk">OK</button></div>
+      <div class="toast" id="toast" hidden></div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet" hidden>
+  <div class="card">
+    <h3>Il tuo leggio <button class="ibtn" data-close>Chiudi</button></h3>
+    <div class="field"><label for="instSet">Strumento</label><select id="instSet"></select></div>
+    <div class="field" id="partField" hidden><label for="partSet">Parte da leggere</label><select id="partSet"></select></div>
+    <div class="field" id="modeField" hidden><label for="modeSet">Scorrimento del PDF</label>
+      <select id="modeSet"><option value="auto">Automatico (orizzontale se giri il telefono)</option><option value="h">Righi in fila, scorre a sinistra</option><option value="v">Pagina, scorre verso l'alto</option></select></div>
+    <div class="field" id="octField"><label for="octSet">Ottava della parte</label>
+      <select id="octSet"><option value="auto">Automatica</option><option value="-2">2 ottave sotto</option><option value="-1">1 ottava sotto</option><option value="0">Come scritto</option><option value="1">1 ottava sopra</option><option value="2">2 ottave sopra</option></select></div>
+    <section>
+      <div class="rng" id="zoomRow"><label for="zoomSet">Spaziatura delle note</label><input type="range" id="zoomSet" min="0.6" max="2.2" step="0.1"><output id="zoomOut"></output></div>
+      <div class="rng"><label for="sizeSet">Grandezza</label><input type="range" id="sizeSet" min="0.7" max="1.5" step="0.05"><output id="sizeOut"></output></div>
+      <div class="rng"><label for="headSet">Punto di lettura</label><input type="range" id="headSet" min="0.15" max="0.6" step="0.05"><output id="headOut"></output></div>
+      <label class="tog">Mostra la linea di lettura sul PDF <input type="checkbox" id="markSet"></label>
+      <label class="tog">PDF in negativo (per il buio) <input type="checkbox" id="invSet"></label>
+    </section>
+    <section>
+      <label class="tog">Metronomo <input type="checkbox" id="metSet"></label>
+      <label class="tog">Guida melodica (brani d'esempio) <input type="checkbox" id="guideSet"></label>
+      <div class="rng"><label for="volSet">Volume</label><input type="range" id="volSet" min="0" max="1" step="0.05"><output id="volOut"></output></div>
+      <p class="note">Su iPhone, se non senti il metronomo, controlla che il tasto silenzioso laterale non sia attivo.</p>
+    </section>
+    <section>
+      <div class="rng"><label for="offSet">Correzione sincronia</label><input type="range" id="offSet" min="-400" max="400" step="10"><output id="offOut"></output></div>
+      <p class="note">Se questo telefono sembra in ritardo rispetto agli altri sposta verso destra, se è in anticipo verso sinistra.</p>
+      <p class="note" id="syncNote"></p>
+    </section>
+  </div>
+</div>
+
+<div class="sheet" id="songSheet" hidden>
+  <div class="card wide">
+    <h3>Brano e tempo <button class="ibtn" data-close>Chiudi</button></h3>
+    <p class="err" id="lockNote" hidden>Ferma il brano per cambiare spartito o tempo.</p>
+    <div class="cols3">
+      <div class="field"><span class="lbl">Tempo (BPM)</span>
+        <div class="tempo"><button class="ibtn" id="bpmDn" aria-label="Più lento">−</button><input type="number" id="bpmIn" min="30" max="240" inputmode="numeric" aria-label="Battiti al minuto"><button class="ibtn" id="bpmUp" aria-label="Più veloce">+</button></div>
+      </div>
+      <div class="field"><label for="tsSel">Tempo in chiave</label><select id="tsSel"><option>4/4</option><option>3/4</option><option>2/4</option><option>2/2</option><option>6/8</option><option>3/8</option><option>9/8</option><option>12/8</option><option>5/4</option></select></div>
+      <div class="field"><label for="barIn">Parti dalla battuta</label><input type="number" id="barIn" min="1" value="1" inputmode="numeric"></div>
+    </div>
+    <input type="range" id="bpmRange" min="30" max="240" step="1" aria-label="Tempo">
+    <label class="tog">Battuta di conteggio prima di partire <input type="checkbox" id="countSet" checked></label>
+    <p class="note">Nel 6/8 e simili il BPM si riferisce alla croma.</p>
+
+    <section id="partsSec" hidden>
+      <span class="lbl">Parti del brano</span>
+      <p class="note" id="partsHead"></p>
+      <div class="parts" id="partsBox"></div>
+      <div id="rvBox" hidden></div>
+    </section>
+
+    <section>
+      <div class="row" style="justify-content:space-between"><span class="lbl">Brani su Google Drive</span><button class="ibtn" id="refreshBtn">Aggiorna</button></div>
+      <p class="status" id="driveStatus" hidden></p>
+      <div class="list" id="libList"></div>
+      <details id="driveCfg">
+        <summary class="note" style="cursor:pointer">Impostazioni di Drive</summary>
+        <div style="display:grid;gap:10px;margin-top:10px">
+          <div class="field"><label for="folderIn">Link della cartella principale</label><input type="url" id="folderIn" placeholder="https://drive.google.com/drive/folders/…"></div>
+          <div class="field"><label for="keyIn">Chiave API di Google</label><input type="text" id="keyIn" autocomplete="off" spellcheck="false" placeholder="AIza…"></div>
+          <div class="row"><button class="btn primary" id="cfgSave">Salva e carica i brani</button></div>
+          <p class="note">Se le hai già scritte in config.js puoi lasciare vuoti questi campi.</p>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <span class="lbl">Brani d'esempio</span>
+      <div class="list" id="demoList"></div>
+    </section>
+  </div>
+</div>
+
+<div class="sheet" id="qrSheet" hidden>
+  <div class="card">
+    <h3>Fai entrare gli altri <button class="ibtn" data-close>Chiudi</button></h3>
+    <p class="bigcode" id="qrCode">----</p>
+    <div class="qr" id="qrBox"></div>
+    <p class="note" style="text-align:center">Inquadra il QR con la fotocamera dell'iPhone, oppure apri l'app e scrivi il codice.</p>
+    <p class="link" id="qrLink"></p>
+    <button class="btn" id="copyLink">Copia il link</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
