@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
-const VERSION='1.2.1';
+const VERSION='1.3.0';
 const CFG=Object.assign({apiKey:'',folder:''},window.LEGGIO_CONFIG||{});
 const PEER_PREFIX='leggio-insieme-';
 
@@ -51,11 +51,17 @@ const INSTR=[
  {id:'clar',n:'Clarinetto in Si♭',t:2,c:'G',d:'parte trasposta un tono sopra'},
  {id:'tromba',n:'Tromba in Si♭',t:2,c:'G',d:'parte trasposta un tono sopra'},
  {id:'saxa',n:'Sax contralto in Mi♭',t:9,c:'G',d:'parte trasposta una sesta maggiore sopra'},
+ {id:'saxs',n:'Sax soprano in Si♭',t:2,c:'G',d:'parte trasposta un tono sopra'},
  {id:'saxt',n:'Sax tenore in Si♭',t:14,c:'G',d:'parte trasposta una nona sopra'},
+ {id:'saxb',n:'Sax baritono in Mi♭',t:21,c:'G',d:'parte trasposta un\'ottava e una sesta sopra'},
+ {id:'clarb',n:'Clarinetto basso in Si♭',t:14,c:'G',d:'parte trasposta una nona sopra'},
  {id:'corno',n:'Corno in Fa',t:7,c:'G',d:'parte trasposta una quinta sopra'},
  {id:'viola',n:'Viola',t:0,c:'C',d:'chiave di contralto'},
  {id:'cello',n:'Violoncello',t:0,c:'F',d:'chiave di basso'},
  {id:'trombone',n:'Trombone',t:0,c:'F',d:'chiave di basso'},
+ {id:'euph',n:'Euphonium (chiave di basso)',t:0,c:'F',d:'chiave di basso'},
+ {id:'euphb',n:'Euphonium in Si♭ (chiave di violino)',t:14,c:'G',d:'parte trasposta una nona sopra'},
+ {id:'tuba',n:'Tuba / Basso tuba',t:0,c:'F',d:'chiave di basso'},
  {id:'fagotto',n:'Fagotto',t:0,c:'F',d:'chiave di basso'},
  {id:'basso',n:'Basso / Contrabbasso',t:12,c:'F',d:'chiave di basso, suona un\'ottava sotto'},
  {id:'batteria',n:'Batteria / Percussioni',t:0,c:'G'}
@@ -156,6 +162,48 @@ async function driveList(id){
 async function driveMeta(id){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,name&supportsAllDrives=true&key=${encodeURIComponent(apiKey())}`);if(!r.ok)throw await driveErr(r);return r.json();}
 async function driveDownload(id,key){const r=await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true&key=${encodeURIComponent(key||apiKey())}`);if(!r.ok)throw await driveErr(r);return r.arrayBuffer();}
 const isPdf=f=>f.mimeType==='application/pdf'||/\.pdf$/i.test(f.name||'');
+const IMG_RE=/\.(jpe?g|png|webp|gif|bmp|heic|heif|tiff?)$/i;
+const isImg=f=>/^image\//.test(f.mimeType||'')||IMG_RE.test(f.name||'');
+const isSheet=f=>isPdf(f)||isImg(f);
+const imgType=f=>/^image\//.test(f.mimeType||'')?f.mimeType:('image/'+((f.name||'').match(IMG_RE)||['','jpeg'])[1].toLowerCase().replace('jpg','jpeg'));
+// raggruppa le immagini della stessa parte: «Tromba 1.jpg», «Tromba 2.jpg» → «Tromba»
+function groupParts(files){
+  const out=[],groups=new Map();
+  for(const f of files){
+    if(isPdf(f)){out.push({label:f.name.replace(/\.pdf$/i,'').slice(0,40),files:[f],img:false});continue;}
+    const base=f.name.replace(IMG_RE,'');
+    const stem=(base.replace(/[\s_\-.]*(?:p|pag|pagina|page|pg)?[\s_\-.]*\(?\d{1,3}\)?\s*$/i,'').trim()||base).slice(0,40);
+    const k=stem.toLowerCase();
+    if(!groups.has(k)){const g={label:stem,files:[],img:true};groups.set(k,g);out.push(g);}
+    groups.get(k).files.push(f);
+  }
+  for(const g of out)g.files.sort(byName);
+  return out;
+}
+async function makeImageDoc(srcs){
+  const imgs=[],urls=[];
+  for(const s of srcs){
+    const url=URL.createObjectURL(new Blob([s.buf],{type:s.type}));urls.push(url);
+    const im=new Image();im.src=url;
+    try{await im.decode();}catch(e){urls.forEach(u=>URL.revokeObjectURL(u));const er=new Error('img');er.img=1;throw er;}
+    imgs.push(im);
+  }
+  const doc={numPages:imgs.length,isImage:true,rots:[],destroy(){urls.forEach(u=>URL.revokeObjectURL(u));},
+    getPage:async n=>{const im=imgs[n-1],W0=im.naturalWidth,H0=im.naturalHeight;
+      return {getViewport:({scale})=>({width:W0*scale,height:H0*scale,scale}),
+        render:({canvasContext:c,viewport:v,transform:t})=>{c.save();if(t)c.transform(...t);c.scale(v.scale,v.scale);
+          const r=doc.rots[n-1]||0;if(r){c.fillStyle='#fff';c.fillRect(0,0,W0,H0);c.translate(W0/2,H0/2);c.rotate(r);c.translate(-W0/2,-H0/2);}
+          c.drawImage(im,0,0);c.restore();return {promise:Promise.resolve()};}};}};
+  return doc;
+}
+// apre una parte: PDF oppure una o più immagini
+async function openPartDoc(part){
+  if(part.imgs&&part.imgs.length){
+    const srcs=[];for(const i of part.imgs)srcs.push({buf:await pdfBytes(i.f,i.m),type:i.t});
+    const d=await makeImageDoc(srcs);d.rots=(part.rots||[]).slice();return d;
+  }
+  return openPdf(await pdfBytes(part.fileId,part.mod));
+}
 const byName=(a,b)=>a.name.localeCompare(b.name,'it',{numeric:true,sensitivity:'base'});
 function driveMsg(e){
   const s=e&&e.status;
@@ -180,7 +228,36 @@ async function renderCrop(doc,p,cx0,cy0,cx1,cy1,outW){
   return c;
 }
 const AW=1600;
+function binarize(img,adaptive){
+  const W=img.width,H=img.height,d=img.data;
+  const g=new Uint8Array(W*H);
+  if(!adaptive){for(let i=0,j=0;i<g.length;i++,j+=4){const a=d[j+3]/255;g[i]=((d[j]*0.3+d[j+1]*0.59+d[j+2]*0.11)*a+255*(1-a))<150?1:0;}return g;}
+  // foto e scansioni: confronto con la luminosità della zona intorno, così ombre e carta grigia non diventano nere
+  const L=new Float32Array(W*H);for(let i=0,j=0;i<L.length;i++,j+=4)L[i]=d[j]*0.3+d[j+1]*0.59+d[j+2]*0.11;
+  const I=new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=L[y*W+x];I[(y+1)*(W+1)+x+1]=I[y*(W+1)+x+1]+row;}}
+  const r=Math.max(8,Math.round(W/60));
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);
+    for(let x=0;x<W;x++){const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1);
+      const m=(I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0])/((y1-y0)*(x1-x0));
+      const v=L[y*W+x];g[y*W+x]=(v<m*0.8&&v<200)||v<70?1:0;}}
+  return g;
+}
+// inclinazione della pagina (in gradi): l'angolo che rende più "netti" i righi
+function estimateSkew(g,W,H){
+  const pts=[];for(let y=0;y<H;y+=2)for(let x=0;x<W;x+=2)if(g[y*W+x])pts.push(x,y);
+  if(pts.length<200)return 0;
+  const score=a=>{const t=Math.tan(a*Math.PI/180),off=Math.ceil(W*Math.abs(t))+2,h=new Float64Array(H+2*off);
+    for(let i=0;i<pts.length;i+=2){const yy=Math.round(pts[i+1]-pts[i]*t)+off;if(yy>=0&&yy<h.length)h[yy]++;}
+    let s=0;for(let i=0;i<h.length;i++)s+=h[i]*h[i];return s;};
+  let best=0,bs=-1;
+  for(let a=-5;a<=5.001;a+=0.25){const v=score(a);if(v>bs){bs=v;best=a;}}
+  const c=best;for(let a=c-0.25;a<=c+0.25001;a+=0.05){const v=score(a);if(v>bs){bs=v;best=a;}}
+  const c2=best;for(let a=c2-0.05;a<=c2+0.05001;a+=0.01){const v=score(a);if(v>bs){bs=v;best=a;}}
+  return best;
+}
 async function analyzeDoc(doc,onPage){
+  const adaptive=!!doc.isImage;const rots=[];
   const out=[];const aspects=[];
   for(let p=0;p<doc.numPages;p++){
     onPage&&onPage(p+1,doc.numPages);
@@ -188,17 +265,24 @@ async function analyzeDoc(doc,onPage){
     const c=document.createElement('canvas');c.width=AW;c.height=Math.round(vp.height);
     const x=c.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
     await page.render({canvasContext:x,viewport:vp}).promise;
-    const id=x.getImageData(0,0,c.width,c.height);
+    let id=x.getImageData(0,0,c.width,c.height);
+    let g=binarize(id,adaptive);
+    rots[p]=0;
+    if(adaptive){
+      const a=estimateSkew(g,c.width,c.height);
+      if(Math.abs(a)>0.04){doc.rots[p]=-a*Math.PI/180;rots[p]=doc.rots[p];
+        x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);await page.render({canvasContext:x,viewport:vp}).promise;
+        id=x.getImageData(0,0,c.width,c.height);g=binarize(id,adaptive);}
+    }
     aspects.push(+(c.height/AW).toFixed(5));
-    for(const s of analyzeImage(id))out.push(Object.assign(s,{p}));
+    for(const s of analyzeImage(id,adaptive,g))out.push(Object.assign(s,{p}));
     c.width=c.height=1;
   }
-  return {sys:out,pages:aspects};
+  return {sys:out,pages:aspects,rots};
 }
-function analyzeImage(img){
-  const W=img.width,H=img.height,d=img.data;
-  const g=new Uint8Array(W*H);
-  for(let i=0,j=0;i<g.length;i++,j+=4){const a=d[j+3]/255;g[i]=((d[j]*0.3+d[j+1]*0.59+d[j+2]*0.11)*a+255*(1-a))<150?1:0;}
+function analyzeImage(img,adaptive,pre){
+  const W=img.width,H=img.height;
+  const g=pre||binarize(img,adaptive);
   // righe lunghe = linee del pentagramma
   const lines=[];let prev=null;
   for(let y=0;y<H;y++){
@@ -233,22 +317,28 @@ function analyzeImage(img){
   systems.forEach((s,si)=>{
     const sp=s.sp;const cand=[];
     for(let x=Math.max(0,s.x0-2);x<=Math.min(W-1,s.x1+2);x++){
-      if(colF(x,s.top,s.bot)<0.97)continue;
-      if(colF(x,s.top,s.top+0.3*sp)<1||colF(x,s.bot-0.3*sp,s.bot)<1)continue;
-      let head=false;
-      for(const sd of [-1,1]){const a=x+sd*0.15*sp,z=x+sd*0.65*sp;
-        const e=Math.max(boxF(a,z,s.top,s.top+0.8*sp),boxF(a,z,s.bot-0.8*sp,s.bot)),m=boxF(a,z,s.top+1.5*sp,s.bot-1.5*sp);
-        if(e>0.42&&m<0.3)head=true;}
-      if(head)continue;
+      if(colF(x,s.top,s.bot)<(adaptive?0.9:0.97))continue;
+      const ef=adaptive?0.6:1;
+      if(colF(x,s.top-(adaptive?1:0),s.top+0.3*sp)<ef||colF(x,s.bot-0.3*sp,s.bot+(adaptive?1:0))<ef)continue;
       if(s.n===1){const a=colF(x,s.top-1.3*sp,s.top-0.4*sp),b=colF(x,s.bot+0.4*sp,s.bot+1.3*sp);if(a>0.5||b>0.5)continue;}
       cand.push(x);
     }
     const cl=[];
     for(const x of cand){const c=cl[cl.length-1];if(c&&x-c.last<=Math.max(2,0.9*sp)){c.last=x;if(x-c.runEnd>1)c.runs++;c.runEnd=x;}else cl.push({first:x,last:x,runEnd:x,runs:1});}
+    // una colonna nera accanto a una testa di nota è un gambo, non una stanghetta
+    const isStem=c=>{
+      for(const sd of [-1,1]){
+        const e0=sd>0?c.last+1+0.1*sp:c.first-1-0.1*sp,e1=sd>0?c.last+0.65*sp:c.first-0.65*sp;
+        const e=Math.max(boxF(e0,e1,s.top,s.top+0.8*sp),boxF(e0,e1,s.bot-0.8*sp,s.bot)),m=boxF(e0,e1,s.top+1.5*sp,s.bot-1.5*sp);
+        if(e>(adaptive?0.5:0.42)&&m<0.3)return true;
+      }
+      return false;
+    };
     let ends=cl.filter(c=>{
       const w=c.last-c.first+1,cx=(c.first+c.last)/2;
       if(cx<s.x0+5.5*sp)return false;                        // inizio sistema, chiave, tempo
-      if(c.runs===1&&w>=0.24*sp&&w<=0.45*sp&&s.x1-cx>1.5*sp)return false; // tratto di un numero/lettera
+      if(!adaptive&&c.runs===1&&w>=0.24*sp&&w<=0.45*sp&&s.x1-cx>1.5*sp)return false; // tratto di un numero/lettera
+      if(isStem(c))return false;
       return true;
     }).map(c=>(c.first+c.last)/2);
     if(!ends.length||s.x1-ends[ends.length-1]>2.5*sp)ends.push(s.x1);
@@ -269,7 +359,7 @@ const partBars=p=>p.sys.reduce((a,s)=>a+(s.off?0:sysBars(s)),0);
 function setSysBars(s,n){n=clamp(n,1,64);const a=s.b[0],z=s.b[s.b.length-1];s.b=Array.from({length:n+1},(_,i)=>+(a+(z-a)*i/n).toFixed(5));s.m=1;}
 function guessInst(name){
   const n=name.toLowerCase();
-  const T=[['batter','batteria'],['percuss','batteria'],['drum','batteria'],['trombon','trombone'],['tromb','tromba'],['trump','tromba'],['trp','tromba'],['flic','tromba'],['clar','clar'],['cl.','clar'],['tenor','saxt'],['contralto','saxa'],['alto','saxa'],['sax','saxa'],['corn','corno'],['horn','corno'],['flaut','flauto'],['flute','flauto'],['ottavin','flauto'],['oboe','oboe'],['violonc','cello'],['cell','cello'],['viola','viola'],['violin','violino'],['contrab','basso'],['bass','basso'],['fagott','fagotto'],['chitarr','chitarra'],['guitar','chitarra'],['pian','piano'],['tastier','piano'],['keys','piano'],['voc','voce'],['canto','voce'],['sopran','voce']];
+  const T=[['clarinetto bass','clarb'],['clarinetto in sib bass','clarb'],['clar. bass','clarb'],['clar bass','clarb'],['cl. bass','clarb'],['cl bass','clarb'],['bass clar','clarb'],['flicorno baritono','euph'],['flicorno tenore','euph'],['euph','euph'],['eufon','euph'],['bombardin','euph'],['tuba','tuba'],['bassotuba','tuba'],['sax bari','saxb'],['bari sax','saxb'],['baritono','saxb'],['sax sopran','saxs'],['soprano sax','saxs'],['sax s.','saxs'],['sax t.','saxt'],['sax a.','saxa'],['batter','batteria'],['percuss','batteria'],['drum','batteria'],['trombon','trombone'],['tromb','tromba'],['trump','tromba'],['trp','tromba'],['flic','tromba'],['clar','clar'],['cl.','clar'],['tenor','saxt'],['contralto','saxa'],['alto','saxa'],['sax','saxa'],['corn','corno'],['horn','corno'],['flaut','flauto'],['flute','flauto'],['ottavin','flauto'],['oboe','oboe'],['violonc','cello'],['cell','cello'],['viola','viola'],['violin','violino'],['contrab','basso'],['bass','basso'],['fagott','fagotto'],['chitarr','chitarra'],['guitar','chitarra'],['pian','piano'],['tastier','piano'],['keys','piano'],['voc','voce'],['canto','voce'],['sopran','voce']];
   for(const [k,v] of T)if(n.includes(k))return v;
   return 'piano';
 }
@@ -358,8 +448,10 @@ async function onHostData(c,d){
   if(d.t==='ping'){sendTo(c,{t:'pong',a:d.a,h:Date.now()});return;}
   if(d.t==='hello'){me.nm=String(d.nm||'').slice(0,24);me.inst=String(d.inst||'');renderPeople();broadcastRoster();return;}
   if(d.t==='getpdf'&&typeof d.f==='string'){
-    const p=cur&&cur.parts.find(x=>x.fileId===d.f);if(!p)return;
-    try{const b=await pdfBytes(p.fileId,p.mod);sendTo(c,{t:'pdf',f:d.f,data:b});}catch(e){sendTo(c,{t:'pdf',f:d.f,err:1});}
+    let m=null;
+    for(const p of (cur?cur.parts:[])){if(p.fileId===d.f&&!p.imgs)m=p.mod;for(const i of p.imgs||[])if(i.f===d.f)m=i.m;}
+    if(m===null)return;
+    try{const b=await pdfBytes(d.f,m);sendTo(c,{t:'pdf',f:d.f,data:b});}catch(e){sendTo(c,{t:'pdf',f:d.f,err:1});}
   }
 }
 async function guestJoin(c){
@@ -640,7 +732,7 @@ function driveStatus(t){const s=$('driveStatus');s.hidden=!t;s.textContent=t||''
 let nav=[];
 async function listFolder(id,title){
   const items=await driveList(id);
-  return {id,title,folders:items.filter(f=>f.mimeType===FOLDER).sort(byName).map(f=>({id:f.id,title:f.name})),pdfs:items.filter(isPdf).sort(byName)};
+  return {id,title,folders:items.filter(f=>f.mimeType===FOLDER).sort(byName).map(f=>({id:f.id,title:f.name})),pdfs:items.filter(isSheet).sort(byName)};
 }
 async function loadLibrary(force){
   if(!rootFolder()||!apiKey()){lib=null;nav=[];driveStatus('Collega la cartella Drive dalle impostazioni qui sotto.');renderLib();return;}
@@ -667,7 +759,7 @@ async function openFolder(f){
   try{
     const r=await listFolder(f.id,f.title);
     if(!r.folders.length&&r.pdfs.length){driveStatus('');openBrano(r);return;}
-    if(!r.folders.length){driveStatus('Nella cartella «'+f.title+'» non ci sono PDF né altre cartelle.');return;}
+    if(!r.folders.length){driveStatus('Nella cartella «'+f.title+'» non ci sono PDF, immagini o altre cartelle.');return;}
     nav.push(r);lib=r.folders;driveStatus('');renderLib();
     $('libList').scrollIntoView({block:'nearest'});
   }catch(e){driveStatus(driveMsg(e));}
@@ -687,7 +779,7 @@ function renderLib(){
   if(top.pdfs.length&&(top.folders.length||nav.length===1)){
     const r=document.createElement('div');r.className='item'+(cur&&cur.id===top.id?' cur':'');
     const t=document.createElement('span');t.className='t';t.textContent=top.title;
-    const s2=document.createElement('span');s2.className='s';s2.textContent=top.pdfs.length+' PDF in questa cartella';
+    const s2=document.createElement('span');s2.className='s';s2.textContent=top.pdfs.length+' spartiti in questa cartella';
     const b=document.createElement('button');b.className='ibtn';b.textContent=cur&&cur.id===top.id?'Aperto':'Apri come brano';b.disabled=!ed;
     b.onclick=()=>openBrano(top);
     r.append(t,s2,b);box.append(r);
@@ -713,22 +805,26 @@ async function openBrano(b){
   if(!canEditSong()||opening)return;
   opening=true;driveStatus('Leggo «'+b.title+'»…');
   try{
-    const items=b.pdfs||(await driveList(b.id)).filter(isPdf).sort(byName);
-    if(!items.length){driveStatus('Nella cartella «'+b.title+'» non ci sono PDF.');return;}
+    const files=b.pdfs||(await driveList(b.id)).filter(isSheet).sort(byName);
+    if(!files.length){driveStatus('Nella cartella «'+b.title+'» non ci sono PDF o immagini.');return;}
+    const items=groupParts(files);
     const meta=(await idb.get('meta:'+b.id))||{};
-    await loadPdfJs();
+    if(items.some(g=>!g.img))await loadPdfJs();
     const parts=[];
     for(let i=0;i<items.length;i++){
-      const f=items[i];const label=f.name.replace(/\.pdf$/i,'').slice(0,40);
+      const g=items[i],f=g.files[0],label=g.label;
       driveStatus(`Scarico e leggo «${label}» (${i+1} di ${items.length})…`);
-      const mod=f.modifiedTime||'0';
-      let an=await idb.get('an:'+f.id+':'+mod),err='';
+      const mod=g.files.map(x=>x.modifiedTime||'0').join('|');
+      const part={fileId:f.id,mod,label,inst:(meta.inst||{})[f.id]||guessInst(g.label),sys:[],pages:[],err:''};
+      if(g.img)part.imgs=g.files.map(x=>({f:x.id,m:x.modifiedTime||'0',t:imgType(x)}));
+      const ak='an:'+g.files.map(x=>x.id).join('+')+':'+mod;part.ak=ak;
+      let an=await idb.get(ak);
       try{
-        const bytes=await pdfBytes(f.id,mod);
-        if(!an){const doc=await openPdf(bytes);an=await analyzeDoc(doc,(p,n)=>driveStatus(`Leggo «${label}» · pagina ${p} di ${n} (${i+1} di ${items.length})`));try{doc.destroy();}catch(e){}await idb.set('an:'+f.id+':'+mod,an);}
-        if(!an.sys.length)err='Nessun pentagramma trovato';
-      }catch(e){err=e&&e.status?driveMsg(e):'PDF non leggibile';an={sys:[],pages:[]};}
-      parts.push({fileId:f.id,mod,label,inst:(meta.inst||{})[f.id]||guessInst(f.name),sys:an.sys,pages:an.pages,err});
+        if(!an){const doc=await openPartDoc(part);an=await analyzeDoc(doc,(p,n)=>driveStatus(`Leggo «${label}» · pagina ${p} di ${n} (${i+1} di ${items.length})`));try{doc.destroy();}catch(e){}await idb.set(ak,an);}
+        part.sys=an.sys;part.pages=an.pages;if(an.rots&&an.rots.some(Boolean))part.rots=an.rots;
+        if(!an.sys.length)part.err=g.img?'Nessun pentagramma trovato nella foto: serve più dritta e nitida':'Nessun pentagramma trovato';
+      }catch(e){part.err=e&&e.status?driveMsg(e):e&&e.img?'Formato immagine non leggibile da questo browser (converti in JPG)':'File non leggibile';}
+      parts.push(part);
     }
     cur={id:b.id,title:b.title,parts,ts:meta.ts||[4,4],bpm:meta.bpm||100,bars:meta.bars||0,v:Date.now()};
     S.beat=UNIT[meta.beat]?meta.beat:defaultBeat(cur.ts);S.count=meta.count!=null?meta.count:barBeats(cur.ts,S.beat);
@@ -748,7 +844,7 @@ function expectedBars(){
 }
 function curToState(){
   return {kind:'pdf',id:cur.id,title:cur.title,ts:cur.ts,bars:expectedBars(),v:cur.v,
-    parts:cur.parts.filter(p=>!p.err).map(p=>({fileId:p.fileId,mod:p.mod,label:p.label,inst:p.inst,sys:p.sys,pages:p.pages}))};
+    parts:cur.parts.filter(p=>!p.err).map(p=>Object.assign({fileId:p.fileId,mod:p.mod,label:p.label,inst:p.inst,sys:p.sys,pages:p.pages},p.imgs?{imgs:p.imgs}:{},p.rots?{rots:p.rots}:{}))};
 }
 function pushCur(){if(!cur||!canEditSong())return;cur.v=Date.now();S.song=curToState();applySong();publish();updateBar();renderParts();}
 function renderParts(){
@@ -778,12 +874,12 @@ async function openReview(i){
   const p=cur.parts[i];const box=$('rvBox');box.hidden=false;box.textContent='';const tok=++rvToken;
   const h=document.createElement('h3');h.style.fontSize='20px';h.textContent='Righi di «'+p.label+'»';
   const close=document.createElement('button');close.className='ibtn';close.textContent='Fatto';
-  close.onclick=async()=>{box.hidden=true;box.textContent='';rvToken++;await idb.set('an:'+p.fileId+':'+p.mod,{sys:p.sys,pages:p.pages});pushCur();};
+  close.onclick=async()=>{box.hidden=true;box.textContent='';rvToken++;await idb.set(p.ak||('an:'+p.fileId+':'+p.mod),{sys:p.sys,pages:p.pages,rots:p.rots});pushCur();};
   h.append(close);box.append(h);
   const note=document.createElement('p');note.className='note';note.textContent='Le linee blu sono le stanghette trovate. Se un rigo ha battute in più o in meno (una pausa di 8 battute conta 8), correggi il numero: le battute del rigo vengono divise in parti uguali. «Escludi» toglie un rigo che non va suonato. Premi «Fatto» per mandare le correzioni a tutti.';box.append(note);
   const rv=document.createElement('div');rv.className='rv';box.append(rv);
   box.scrollIntoView({behavior:'smooth',block:'start'});
-  let doc;try{doc=await openPdf(await pdfBytes(p.fileId,p.mod));}catch(e){note.textContent='Non riesco ad aprire il PDF.';return;}
+  let doc;try{doc=await openPartDoc(p);}catch(e){note.textContent='Non riesco ad aprire lo spartito.';return;}
   const W=Math.min(1400,Math.round((rv.clientWidth||700)*Math.min(2,devicePixelRatio||1)));
   for(let k=0;k<p.sys.length;k++){
     if(tok!==rvToken)break;
@@ -948,7 +1044,7 @@ function getDoc(part){
   const k=part.fileId+':'+part.mod;
   if(!docCache.has(k)){
     if(docCache.size>=3){for(const [kk,p] of docCache){if(kk!==k){p.then(d=>{try{d.destroy();}catch(e){}}).catch(()=>{});docCache.delete(kk);break;}}}
-    docCache.set(k,(async()=>openPdf(await pdfBytes(part.fileId,part.mod)))().catch(e=>{docCache.delete(k);throw e;}));
+    docCache.set(k,openPartDoc(part).catch(e=>{docCache.delete(k);throw e;}));
   }
   return docCache.get(k);
 }

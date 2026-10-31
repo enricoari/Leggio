@@ -1,5 +1,5 @@
 /* Service worker: rende l'app installabile e veloce da riaprire. */
-const VERSION = 'leggio-1.2.1';
+const VERSION = 'leggio-1.3.0';
 const SHELL = ['./', 'index.html', 'app.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 const CDN = /^(https:\/\/(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com))\//;
 
